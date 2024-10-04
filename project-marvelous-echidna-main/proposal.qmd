@@ -1,0 +1,161 @@
+---
+title: "Project title"
+subtitle: "Proposal"
+author: "marvelous echidna"
+---
+
+```{r}
+#| label: load-pkgs
+#| message: false
+library(tidyverse)
+library(skimr)
+library(readxl)
+```
+
+# Data 1
+
+## Introduction and data
+
+-   Identify the source of the data.
+
+https://essd.copernicus.org/articles/13/5213/2021/
+
+https://publications.jrc.ec.europa.eu/repository/handle/JRC125851
+
+https://zenodo.org/records/6483002
+
+-   State when and how it was originally collected (by the original data curator, not necessarily how you found the data).
+
+Their paper was written in 2021 and published in 2022. The dataset on anthropogenic greenhouse gas emissions covering the years 1970-2019 was originally collected by the "Emissions Database for Global Atmospheric Research" (EDGAR), and used by this team to identify the greenhouse gas emissions. The EDGAR database is a well-known and widely used resource for greenhouse gas emissions data, providing comprehensive information on emissions from various sources, including fossil fuel combustion and industry, methane emissions, nitrous oxide emissions, fluorinated gases, and net CO2 emissions from land use, land-use change, and forestry (LULUCF). The data from EDGAR are collected through a combination of methods, including direct measurements, statistical modeling, and estimation based on activity data and emission factors. The dataset is continually updated and refined by the EDGAR project team to provide accurate and reliable information on greenhouse gas emissions globally. The dataset from the source that used EDGAR's data also include information from other sources, such as bookkeeping models for net CO2 emissions from LULUCF, to complement and enhance the coverage and accuracy of the emissions data.
+
+-   Write a brief description of the observations.
+
+The research data highlights discrepancies in global greenhouse gas emissions inventories, emphasizes the need for improved reporting methods, and underscores the importance of high-quality data for tracking climate change progress. The dataset, sourced from EDGAR and bookkeeping models, provides comprehensive information on global GHG emissions by sector from 1970 to 2019, revealing trends in emissions reductions and increases across regions and economic sectors. Some of the trends include: Sustained emissions growth: There is a pattern of sustained emissions growth over the five decades analyzed, with high confidence that global anthropogenic GHG emissions have increased every decade; and, Dominance of CO2 emissions: CO2 has accounted for almost 75% of the emissions growth since 1970 in terms of CO2 equivalent, making it the dominant driver of emissions growth.
+
+## Research question
+
+-   A well formulated research question. (You may include more than one research question if you want to receive feedback on different ideas for your project. However, one per data set is required.)
+
+What is the relationship between the energy sector's greenhouse gas emissions and economic development in different regions from 1970 to 2019?
+
+-   A description of the research topic along with a concise statement of your hypotheses on this topic.
+
+Understanding the relationship between greenhouse gas emissions from the energy sector and economic development is crucial for informing sustainable development policies. By examining how economic growth influences emissions and vice versa, policymakers can design strategies to mitigate climate change while promoting economic prosperity.
+
+Hypothesis: Higher levels of economic development will be associated with increased greenhouse gas emissions from the energy sector due to greater energy demand and industrial activities.
+
+-   Identify the types of variables in your research question. Categorical? Quantitative?
+
+Dependent variable: Greenhouse gas emissions from the energy sector (quantitative).
+Independent variable: Economic development indicators such as GDP per capita or industrial output (quantitative).
+Moderator variables: Region (categorical), time period (1970-2019, quantitative).
+Control variables: Energy efficiency measures, renewable energy adoption, policy interventions, population growth, and technological advancements.
+
+
+## Glimpse of data
+
+```{r}
+#| label: load-data-1
+# add code here
+ghg_data_gwp100 <- read_excel("data/essd_ghg_data_gwp100.xlsx", 
+    sheet = "data")
+lulucf_data <- read_excel("data/essd_lulucf_data.xlsx", 
+    sheet = "data")
+skimr::skim(ghg_data_gwp100)
+skimr::skim(lulucf_data)
+```
+
+# Data 2
+
+## Introduction and data
+
+-   Identify the source of the data.
+
+The World bank.
+https://datacatalog.worldbank.org/search/dataset/0037712/World-Development-Indicators
+
+-   State when and how it was originally collected (by the original data curator, not necessarily how you found the data).
+
+The data is annually collected and compiled by the World Bank from officially-recognized international sources, offering national, regional, and global estimates that represent the most current and accurate global development data available.
+
+-   Write a brief description of the observations.
+
+ Observations in this dataset include annual data for over 200 countries across various indicators such as health, education, economic performance, infrastructure, and environmental metrics. Each observation provides insight into the status and progress of a country on these indicators for a given year.
+## Research question
+
+-   A well formulated research question. (You may include more than one research question if you want to receive feedback on different ideas for your project. However, one per data set is required.)
+
+How have health expenditures and life expectancy changed over the past two decades, and what is their relationship with economic performance across countries?
+
+What is the impact of access to improved water sources and sanitation facilities on child mortality rates in low and lower-middle-income countries over the last two decades?
+
+-   A description of the research topic along with a concise statement of your hypotheses on this topic.
+
+This research aims to investigate the relationship between public health infrastructure—specifically, access to improved water sources and sanitation facilities—and child mortality rates. The underlying hypothesis is that increased access to improved water sources and sanitation facilities is associated with lower child mortality rates. This relationship is expected to be more pronounced in low and lower-middle-income countries, where improvements in basic infrastructure can significantly affect health outcomes.
+
+-   Identify the types of variables in your research question. Categorical? Quantitative?
+
+Health Expenditure (% of GDP): Total expenditure on health as a percentage of GDP - Quantitative
+Life Expectancy at Birth (Years): Average number of years a newborn is expected to live - Quantitative
+GDP Growth (Annual %): Annual percentage increase in a country's GDP - Quantitative
+Country Income Group: Classification based on GDP per capita (High income, Upper middle income, Lower middle income, Low income) - Categorical
+Access to Improved Water Sources (% of Population): Percentage with access to safe drinking water - Quantitative
+Access to Improved Sanitation Facilities (% of Population): Percentage with access to improved sanitation - Quantitative
+Under-5 Mortality Rate (Deaths per 1,000 Live Births): Deaths of children under five years old per 1,000 live births - Quantitative
+Mortality Rate Attributed to Unsafe Water, Unsafe Sanitation, and Lack of Hygiene (Per 100,000 Population): Mortality rate due to lack of access to safe water, sanitation, and hygiene - Quantitative
+
+## Glimpse of data
+
+```{r}
+#| label: load-data-2
+
+file_path <- "data/WDIEXCEL.xlsx"
+wdi_data <- read_excel(file_path)
+skim(wdi_data)
+```
+
+# Data 3
+
+## Introduction and data
+
+-   Identify the source of the data.
+    - https://catalog.data.gov/dataset/global-landslide-catalog-export
+-   State when and how it was originally collected (by the original data curator, not necessarily how you found the data).
+    - The data was collected by searching for news reports, scientific reports, 
+    eyewitness statements, aerial photography, as well as other media that reliably
+    reported the details of the landslide event (source:
+    https://doi.org/10.1007/s11069-009-9401-4).
+
+-   Write a brief description of the observations.
+    - The database records each landslide event that has been reported since 2007
+    until March 2016. The database records observations such as the date, time, 
+    trigger, fatalities, geographic location, as well as a host of other useful
+    information.
+
+## Research question
+
+-   A well formulated research question. (You may include more than one research question if you want to receive feedback on different ideas for your project. However, one per data set is required.)
+    - Are there areas that are more prone to experiencing landslides? If so, what
+    types of areas are more vulnerable to landslides? Are landslides more deadly
+    in different areas around the world? Have landslides increased in frequency?
+
+-   A description of the research topic along with a concise statement of your hypotheses on this topic.
+    - Research into the global presence of landslides and potential clusters. 
+    - Hypothesis: Landslides are not a random occurrence, and predominantly occur 
+    in certain areas around the globe. These areas may have shared properties such
+    as annual rainfall, soil composition, and perhaps even latitude.
+
+-   Identify the types of variables in your research question. Categorical? Quantitative?
+    - A mix of qualitative and quantitative. Variables like location, landslide 
+    trigger, and country are qualitative, but variables like fatalities and 
+    date/time are quantitative.
+
+## Glimpse of data
+
+```{r}
+#| label: load-data-3
+data <- read_csv('data/Global_Landslide_Catalog_Export.csv')
+
+glimpse(data)
+skim(data)
+```

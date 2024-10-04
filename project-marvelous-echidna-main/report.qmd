@@ -1,0 +1,412 @@
+---
+title: "Understanding Landslide Hazards: Analysis, Insights, and Implications for Disaster Management and Resilience"
+subtitle: "Report"
+echo: false
+author: marvelous-echidna
+warning: false
+message: false
+---
+
+# Introduction
+Landslides represent a significant natural hazard that, despite their devastating impact on global communities, often remain under the radar. Driven by a need to understand the patterns of these occurrences and the factors that contribute to their severity, our research addresses critical questions regarding regional susceptibility, the human consequences of these disasters, and potential trends linked to broader environmental changes, such as climate change. Our initial analysis has uncovered a geographical pattern in the frequency and impact of landslides, laying the groundwork for more in-depth exploration.
+
+This study delves into the relationship between the size of landslides and the fatalities they cause, and assesses the effectiveness of a logistic regression model in predicting the size of landslides. Our results show that larger landslides tend to be associated with higher fatality rates, and the model achieved a ROC AUC score of 0.689, indicating moderate predictive capability. Additionally, a map illustrating the geographic distribution of landslides highlights regions that are particularly at risk, providing valuable information for disaster preparedness and mitigation efforts. Moreover, our models that predict the number of casualties offer crucial insights for emergency response planning, particularly in areas like Ithaca that are prone to such events. These findings emphasize the necessity of improving prediction models and strengthening regional disaster response strategies to better manage landslide risks amid changing environmental conditions.
+
+# Data description
+Our analysis utilizes NASA's Global Landslide Catalog, which compiles landslide incidents worldwide from 2007 to 2019. The inception of this data set was motivated by the need for a unified source of data to enhance landslide hazard modeling and risk assessment. The data set meticulously catalogs events gathered from news reports, scientific articles, and eyewitness accounts and aims to support the scientific community in understanding and mitigating landslide risks.
+
+Overview and Funding:
+Each record in this dataset details a single landslide event, providing information on the date, time, location, trigger, type, and extent of the area affected, as well as the human repercussions in terms of injuries and fatalities. These attributes afford researchers like us a comprehensive view of each incident's context and impact. The catalog was developed by NASA, aligning with its mission to study Earth surface changes and their implications for human populations. This project reflects the agency’s commitment to leveraging its technological and scientific resources to foster a safer, more informed world.
+
+Data Collection:
+The data collection process for this study integrated a variety of sources including news reports, eyewitness accounts, and scientific analyses. This amalgamation enriched the dataset, albeit introducing complexities due to the varying degrees of visibility of each reported event. Factors such as the accessibility of the affected areas, the level of media attention, and the availability of local reporting mechanisms significantly influenced which events were recorded and how comprehensively. These elements introduce a layer of variability that must be considered when assessing the accuracy and thoroughness of the dataset.
+
+Preprocessing Steps:
+Before we could analyze the data, it went through a thorough preprocessing phase to enhance its uniformity and reliability. This included refining the accuracy of geographical coordinates and restructuring date and time information into a more usable format. We also standardized these formats across the dataset to facilitate temporal analyses and integrated categorical standards to classify the characteristics of each landslide. These critical steps were necessary to prepare the dataset for detailed analysis and to enable its
+
+Ethical Considerations:
+It's important to note that the dataset includes sensitive information regarding human casualties. While the individuals involved did not directly participate in the data collection, the use of this data is intended to serve the public good by enhancing our understanding of landslides and facilitate improved disaster response strategies.
+
+# Data analysis
+```{r}
+#| include: false
+
+library(tidyverse)
+library(tidymodels)
+```
+
+```{r}
+#| label: data
+#| fig-width: 6
+#| fig-height: 3
+
+set.seed(123)
+
+data <- read_csv('data/nasa_global_landslide_catalog_point.csv',
+                 show_col_types = FALSE) |>
+  select(c('event_date','location_accuracy','landslide_category',	
+           'landslide_trigger',	'landslide_size',	'landslide_setting',
+           'fatality_count', 'injury_count','country_name',	'country_code',	
+           'admin_division_name', 'gazetteer_closest_point', 'gazetteer_distance',
+           'longitude', 'latitude')) |>
+  separate_wider_delim(cols = 'event_date', ' ', names = c('date','time')) |>
+  separate_wider_delim(cols = 'time', ':', names = c('hr','min','sec')) |>
+  mutate(date = mdy(date)) |>
+  mutate(across(c('hr','min','sec'),as.numeric)) |>
+  mutate(date = make_datetime(year = year(date),
+                              month = month(date),
+                              day = day(date),
+                              hour = hr,
+                              min = min,
+                              sec = sec)) |>
+  mutate(landslide_size = tolower(landslide_size)) |>
+  select(!c('hr','min','sec'))
+
+data |>
+  group_by(year(date)) |>
+  count() |>
+  ggplot(aes(x = `year(date)`, y = n)) + 
+  geom_line() + 
+  scale_x_continuous(breaks = c(seq(1915,2023, by = 10),2023)) + 
+  labs(
+    title = 'Chronology of Reported Landslides',
+    subtitle = 'Years outside of 2007-2020 are suspected\nof being underreported.',
+    x = 'Year',
+    y = 'Count',
+    caption = 'Source: https://gpm.nasa.gov/landslides/index.html') + 
+  theme_minimal()
+  
+
+```
+
+In our analyses involving time, we only included data between 2007 and 2019. This is because there is an unrealistically few number of landslides recorded outside of this range, and this is most likely due to a lack of reporting rather than a lack of landslides occurring. 
+
+```{r}
+#| label: chronology
+#| fig-width: 6
+#| fig-height: 3
+
+data |> 
+  filter(date > make_date(year = 2007) & 
+           date < make_date(year = 2020)) |>
+  filter(!is.na(landslide_size)) |>
+  mutate(landslide_size = str_replace_all(landslide_size,'_',' ')) |>
+  mutate(landslide_size = str_to_title(landslide_size)) |>
+  mutate(landslide_size = fct_relevel(landslide_size,
+                                     c('Catastrophic','Very Large','Large','Medium','Small','Unknown'))) |>
+  group_by(year(date), landslide_size) |>
+  count() |>
+  ggplot(aes(x = `year(date)`,y = n, color = landslide_size)) + 
+  geom_line(show.legend = FALSE) + 
+  facet_wrap(facets = ~landslide_size, scales = 'free_y') + 
+  theme_linedraw() + 
+  labs(
+    title = 'Landslides over Time, Seperated by Size',
+    x = 'Year',
+    y = 'Count',
+    caption = 'Source: https://gpm.nasa.gov/landslides/index.html'
+  ) + 
+  scale_x_continuous(breaks = seq(2007, 2019, by = 4))
+
+```
+From the graphs we can see that the number of small and large landslides has increased over time, while the number of medium landslides has decreased. This could potentially be due to a change in how landslides are classified, and not necessarily a change in actual landslide events. The number of landslides each year appears to fluctuate greatly and does not follow any apparent pattern.
+
+
+```{r}
+#| label: months
+#| fig-width: 6
+#| fig-height: 3
+
+data_mon <- data |>
+  drop_na(date) |>
+  mutate(hemi = ifelse(latitude >= 0, 'north','south'),
+         season = fct_collapse(month.abb[month(date)],
+                              'Summer' = c('Jun','Jul','Aug'),
+                              'Fall' = c('Sep','Oct','Nov'),
+                              'Winter' = c('Dec','Jan','Feb'),
+                              'Spring' = c('Mar','Apr','May')),
+         summer = ((c(season == 'Summer' & hemi == 'north')) |
+                      (c(season == 'Winter' & hemi == 'south'))))
+
+data_mon |>
+  filter(hemi == 'north') |>
+  ggplot(aes(x = fct_relevel(month.abb[month(date)],month.abb), 
+             fill = fct_relevel(season, c('Winter','Spring','Summer','Fall')))) + 
+  geom_bar() + 
+  geom_bar(data = filter(data_mon, hemi== 'south'), color = 'black') + 
+  theme_linedraw() + 
+  labs(
+    title = 'Landslides by Month',
+    subtitle = 'Black outline is Southern Hemisphere Landslides',
+    x = 'Month',
+    y = 'Count',
+    caption = 'Source: https://gpm.nasa.gov/landslides/index.html',
+    fill = 'Season'
+  ) + 
+  scale_fill_manual(values = c('skyblue','mistyrose','coral','orange'))
+
+```
+Landslides appear to be seasonal, reaching maximum in the winter and summer seasons and minimum in the fall and spring seasons. This indicates that there are seasonal factors, mainly weather, that contribute to the risk of landslides
+
+```{r}
+#| label: fatalities
+#| fig-width: 6
+#| fig-height: 3
+
+data |> 
+  filter(date > make_date(year = 2007) & 
+           date < make_date(year = 2020)) |>
+  group_by(year(date)) |>
+  summarize(fatality_count = sum(fatality_count, na.rm = TRUE),
+            injury_count = sum(injury_count, na.rm = TRUE)) |>
+  pivot_longer(cols = c(fatality_count, injury_count), names_to = 'severity') |>
+  mutate(date = `year(date)`) |>
+  select(!c(`year(date)`)) |>
+  ggplot(aes(x = date, y = value, color = severity)) + 
+  geom_line() + 
+  labs(
+    title = 'Deaths and Injuries from Landslides',
+    x = 'Year',
+    y = 'Count',
+    color = 'Severity',
+    caption = 'Source: https://gpm.nasa.gov/landslides/index.html'
+  ) + 
+  theme_light() + 
+  scale_color_manual(breaks = c('fatality_count','injury_count'), 
+                     labels = c('Fatalities','Injuries'), 
+                     values = c('red','blue')) + 
+  scale_x_continuous(breaks = seq(2007,2019,2))
+
+```
+
+Deaths and injuries from landslides fluctuates greatly over time, with no apparent pattern.
+
+
+
+```{r}
+#| label: lin_fatal
+#| fig-width: 6
+#| fig-height: 3
+
+ln_dat <- data |>
+  filter(date > make_date(year = 2007) & 
+           date < make_date(year = 2020))
+  
+ln_reg <- linear_reg() |>
+  fit(fatality_count ~ landslide_size + latitude + longitude, data = ln_dat)
+
+glance(ln_reg)
+
+test_df1 <- tibble(landslide_size = c('catastrophic','very_large','large','medium','small'),
+                   date = rep(make_date(year = 2024),5),
+                   latitude = rep(42.444, times = 5),
+                   longitude = rep(-76.5019, times = 5),
+                   landslide_setting = rep('natural_slope', times = 5),
+                   landslide_trigger = rep('downpour', times= 5))
+
+predict(ln_reg, test_df1) |>
+  mutate(landslide_size = c('catastrophic','very_large','large','medium','small'))
+
+```
+From our linear regression model, we can predict how many casualties we could expect to have if a landslide were to occur in Ithaca this year. The model predicts that we would have very few (if any) casualties if a small or medium landslide were to occur, approximately 10 casualties if a large landslide were to occur, and almost 160 casualties if a very large landslide were to occur. The model predicts that there would only be 21 casualties for a catastrophic landslide, however this is unrealistic and is likely due to the fact that the database has very few catastrophic landslides for our model to use.
+
+
+```{r}
+#| label: map
+#| fig-width: 7
+#| fig-height: 5
+
+wr <- map_data("world")
+data |>
+  filter(!is.na(landslide_size)) |>
+  filter(landslide_size != 'unknown') |>
+  mutate(landslide_size = str_replace_all(landslide_size,'_',' ')) |>
+  mutate(landslide_size = str_to_title(landslide_size)) |>
+  mutate(landslide_size = fct_relevel(landslide_size,
+                                     c('Catastrophic','Very Large','Large','Medium','Small'))) |>
+  ggplot() +
+  geom_map(aes(map_id = region), map = wr, data = wr, fill = 'grey') +
+  expand_limits(x = wr$long, y = wr$lat) + 
+  geom_point(aes(x = longitude, y = latitude, color = landslide_size),
+             size = .5,
+             alpha = 5) +
+  theme_grey() + 
+  theme(legend.position = 'bottom') + 
+  scale_color_manual(values = c('red','indianred1','orange','darkcyan','blue4')) + 
+  labs(
+    title = 'World Map of Landslides',
+    color = 'Size',
+    x = '',
+    y = '',
+    caption = 'Source: https://gpm.nasa.gov/landslides/index.html'
+  )
+  
+
+```
+
+```{r}
+#| label: landslide-freq
+
+#Hypothesis 1: The frequency of landslides has increased over the time period covered in the dataset.
+
+landslide_counts <- data |>
+  filter(date > make_date(year = 2007) & 
+           date < make_date(year = 2019)) |>
+  mutate(year = format(date, "%Y")) |>
+  group_by(year) |>
+  summarise(count = n()) |>
+  ungroup()
+
+landslide_counts$year <- as.Date(landslide_counts$year, "%Y")
+
+ggplot(landslide_counts, aes(x = year, y = count)) +
+  geom_line() +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "red") +
+  labs(title = "Landslide Frequency Over Time",
+       x = "Year",
+       y = "Number of Landslides")
+
+```
+  
+```{r}  
+#| label: region-specific
+
+# Hypothesis 2: Certain geographic regions or administrative divisions are more prone to experiencing deadlier landslides compared to others.
+
+fatality_counts <- data |>
+  group_by(admin_division_name) |>
+  summarise(avg_fatality = mean(fatality_count, na.rm = TRUE)) |>
+  arrange(desc(avg_fatality))
+
+top_deadly_regions <- head(fatality_counts, 10)
+print(top_deadly_regions)
+
+```
+
+# Evaluation of significance
+```{r}
+#| label: month_H0
+#| fig-width: 6
+#| fig-height: 3
+
+set.seed(123)
+data_size <- data_mon |>
+  drop_na(landslide_size) |>
+  filter(tolower(landslide_size) != 'unknown') |>
+  mutate(size = fct_collapse(landslide_size,
+                             big = c('catastrophic','very_large','large'),
+                             small = c('medium','small'))) 
+
+dat <- data_size |>
+  group_by(summer, size) |>
+  summarize(n = n()) |> 
+  ungroup() |>
+  group_by(summer) |>
+  mutate(tot = sum(n)) |>
+  ungroup() |>
+  mutate(prop = n / tot)
+
+
+mon_null <- data_size |>
+  specify(size ~ summer, success = 'big') |>
+  hypothesise(null = 'independence') |>
+  generate(1000, type = 'permute') |>
+  calculate(stat = 'diff in props', order = c(TRUE,FALSE))
+
+obs <- sum(filter(dat,size == 'big')$prop * c(-1,1))
+
+visualise(mon_null) + 
+  shade_p_value(obs, direction = 'right')
+
+p_val <- get_p_value(mon_null, obs, direction = 'right')
+p_val
+
+```
+$$
+  H_0: \hat p_{big}^{summer} = \hat p_{big}^{other}
+$$
+
+$$
+  H_A: \hat p_{big}^{summer} > \hat p_{big}^{other}
+$$
+
+To find if the proportion of large, very large, and catastrophic landslides is different in the summer than it is in other months, we conducted a hypothesis test. We generated a null distribution of 1000 samples by permuting whether the event was in summer or not (in their respective hemispheres). We calculate a p value of `{r} pull(p_val)`, which surpasses a significance level of 0.05. Therefore, reject the null hypothesis that the proportion of big landslides is not different in summer than in other months in favor of the alternative hypothesis that big landslides are more likely in summer months.
+
+```{r}
+#| label: ML_time
+#| fig-width: 6
+#| fig-height: 3
+
+set.seed(123)
+eq_split <- data |>
+  filter(landslide_size != 'unknown') |>
+  mutate(landslide_size = fct_collapse(landslide_size,
+    big = c('catastrophic','very_large','large'),
+    little = c('medium','small')
+  )) |>
+  filter(date > make_date(year = 2007) & 
+           date < make_date(year = 2020)) |>
+  initial_split(prop = .75)
+eq_train <- training(eq_split)
+eq_test <- testing(eq_split)
+
+lr_mod <- logistic_reg() |>
+  set_engine(engine = "glm") |>
+  set_mode("classification")
+
+eq_folds <- vfold_cv(data = eq_train, v = 10)
+
+lr_preds <- lr_mod |>
+  fit_resamples(
+    landslide_size ~ landslide_trigger + latitude + longitude + 
+      landslide_setting + date,
+    resamples = eq_folds,
+    control = control_resamples(save_pred = TRUE)
+  )
+
+lr_preds |>
+  collect_predictions() |>
+  roc_auc(truth = landslide_size, .pred_big)
+
+lr_preds |>
+  collect_predictions() |>
+  roc_curve(truth = landslide_size, .pred_big) |>
+  autoplot()
+
+
+
+```
+We utilized a logistic regression model to predict the severity of a landslide. This could be used to estimate the risk of landslides in a particular area or for a particular time. As shown in the ROC curve, our model does not perform very well, but performs somewhat okay with a AUC value of around 0.689.
+
+# Interpretation and conclusions
+Based on the data analysis and visualizations presented, I can make the following key observations:
+
+1. The landslide size categories show distinct patterns over the years analyzed (2007-2019). The "catastrophic" category exhibits high peaks in certain years, indicating the occurrence of severe landslide events. The "very_large" and "large" categories also display peaks, though less extreme than "catastrophic." The number of catastrophic landslides is also less than those of the other landslide sizes. The "large" category in particular seems to have been rising throughout the years, which might imply that the number of large landslides is getting more common. The "medium" and "small" categories seem to fluctuate more regularly with such pronounced spikes as well, and also having more occurrences of landslides at that level in general compared to the other categories. The "medium" category has been decreasing (however still more than the large category), but the "small" category has been rising as well, indicating that smaller landslides are happening more often as well. 
+
+2. The fatality and injury counts associated with landslides representation shows that there is a correlation between the spikes in fatality counts and the years when "catastrophic", "very large" and "medium" landslide events occurred, as seen in the size analysis graphs. This suggests that those categories of landslides might have resulted in the increased in the spike of fatalities. The graph also tells us that the fatalities count exceeds that of the injury count, which implies that fatalities are more common than injuries occurring. 
+
+3. The world map displays the geographic distribution of landslide events, color-coded by their size category. This visualization highlights the regions most prone to landslides of varying severities during the analyzed period.
+
+4. Our ML model predict whether a landslide is "big" or "little" based on various predictor variables. Given the ROC AUC score of 0.689 indicates that the model's performance is better than random chance, but there is still room for improvement. Further analysis, such as comparing this score with other models or assessing additional performance metrics, may provide a more comprehensive understanding of the model's predictive capabilities.
+
+5. The linear regression model seeks to predict how many casualties we could expect to have if a landslide were to occur in Ithaca this year. The model predicts that we would have very few (if any) casualties if a small or medium landslide were to occur, approximately 10 casualties if a large landslide were to occur, and almost 160 casualties if a very large landslide were to occur. The model predicts that there would only be 21 casualties for a catastrophic landslide, however this is unrealistic and is likely due to the fact that the database has very few catastrophic landslides for our model to use. Using that hypothesis we create the null hypothesis that there is no significant association between the categorical variable "landslide size", the variables longitude, and latitude and fatality counts. Because we got a low p-value, we are able to reject the null hypothesis in favor of the alternative hypothesis. Furthermore, with the regression model, we see that very_large landslides are definitiely more common. 
+
+6. To try figuring whether certain geographic regions or administrative divisions are more prone to experiencing deadlier landslides compared to others we created a chart, we were able to see that Tolima had the highest amount of fatality from landslides, which means that location and landslide sizes also play a role in the fatality rates of the people there, which goes to show that geography ranges between the landslides as well. This is also shown by the previous graphs, especially the map, as well. 
+
+7. The Landslide Frequency Over Time graph seeks to answer our other hypothesis where The frequency of landslides has increased over the time period covered in the dataset. It is shown through our least squares line that there is a steady increase in landslide frequency over time.
+
+In the context of real-life applications, this analysis can inform disaster preparedness and mitigation efforts. Regions identified as hotspots for severe landslides may benefit from targeted risk assessment, early warning systems, and infrastructure reinforcement. The correlation between catastrophic landslides and high fatality rates underscores the importance of effective emergency response and evacuation plans in vulnerable areas.
+
+Furthermore, understanding the temporal patterns and potential triggers (e.g., precipitation, seismic activity) of landslides could aid in predictive modeling and risk management strategies. Continuous monitoring and data collection would further strengthen these efforts, enabling more robust analysis and informed decision-making. 
+
+The analysis of landslide frequency over time provides valuable information for urban planners and policymakers to assess the changing risk landscape and incorporate resilience measures into urban development projects. This includes zoning regulations, land use planning, and infrastructure design that take into account landslide-prone areas and potential impacts. Communicating the findings of these analysis to the public and engaging communities in disaster preparedness and response efforts are crucial steps in enhancing public safety and resilience. Providing accessible information on landslide risks, mitigation measures, and emergency protocols empowers individuals and communities to take proactive steps to protect themselves and their properties.
+
+# Limitations
+While the data and visualizations provide valuable insights, it's important to note that the analysis covers a relatively short time frame (2007-2019). Additionally, the geographic coverage of the data may be skewed toward certain regions, either due to reporting biases or the actual distribution of landslide events. This could lead to an over-representation or under-representation of specific areas, affecting the conclusions regarding regional differences in landslide severity. Longer-term trends and patterns may not be fully captured. Additionally, the accuracy and completeness of the data could be influenced by factors such as reporting methods and data collection practices in different regions. Underreporting or missing data from certain areas or events could lead to an incomplete picture of the global landslide situation.
+
+While the conclusions drawn from this analysis are insightful, it's essential to approach them with appropriate caution and contextualization. Factors such as data quality, completeness, and potential biases should be carefully considered and addressed through further research and cross-validation with other relevant data sources. The analyses also do not account for socioeconomic and demographic factors that could influence the fatality counts and the impact of landslides. For example, population density, urbanization levels, infrastructure quality, and access to emergency services could vary significantly across different regions, affecting the vulnerability and resilience of communities to landslide events.
+
+
+# Acknowledgments
+Kirschbaum, D.B., Adler, R., Hong, Y. *et al.* A global landslide catalog for hazard applications: method, results, and limitations. *Nat Hazards* **52**, 561–575 (2010). https://doi.org/10.1007/s11069-009-9401-4

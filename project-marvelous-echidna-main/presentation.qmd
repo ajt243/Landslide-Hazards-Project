@@ -1,0 +1,247 @@
+---
+title: "<span style='color: orange;'>Understanding Landslide Hazards</span>"
+subtitle: "<span style = 'color: brown;'>Analysis, Insights, and Implications for Disaster Management and Resilience</span>"
+author: marvelous-echidna <br> Andre Thomas (ajt243), Connor Novak (cjn47), Lawrence Chau (lc2226)
+date: 5/3/24
+format: revealjs
+incremental: true
+execute:
+  echo: false
+---
+
+## Landslide Hazards
+
+- Landslides represent a significant natural hazard with devastating impacts globally
+
+::: incremental
+- Research aims to understand:
+  - Regional susceptibility to landslides
+  - Human consequences of landslide disasters
+  - Potential trends linked to climate change
+  
+:::
+::: incremental
+- Study explores:
+  - Relationship between landslide size and fatalities
+  
+:::
+
+## Landslide Data
+
+::: incremental
+
+-   Source: NASA's Global Landslide Catalog
+    -   Compiled from news, scientific articles, eyewitness accounts
+    -   Records from 2007-2019
+-   Data Details:
+    -   Events include date, time, location, trigger, type, extent
+    -   Captures human impact: injuries and fatalities
+-   Collection & Processing:
+    -   Combined from various sources(news reports, scientific articles, and eyewitness accounts.)
+
+:::
+
+## Landslides Around the World
+
+```{r}
+#| include: false
+#| label: data
+
+
+library(tidyverse)
+library(tidymodels)
+set.seed(123)
+
+data <- read_csv('data/nasa_global_landslide_catalog_point.csv',
+                 show_col_types = FALSE) |>
+  select(c('event_date','location_accuracy','landslide_category',	
+           'landslide_trigger',	'landslide_size',	'landslide_setting',
+           'fatality_count', 'injury_count','country_name',	'country_code',	
+           'admin_division_name', 'gazetteer_closest_point', 'gazetteer_distance',
+           'longitude', 'latitude')) |>
+  separate_wider_delim(cols = 'event_date', ' ', names = c('date','time')) |>
+  separate_wider_delim(cols = 'time', ':', names = c('hr','min','sec')) |>
+  mutate(date = mdy(date)) |>
+  mutate(across(c('hr','min','sec'),as.numeric)) |>
+  mutate(date = make_datetime(year = year(date),
+                              month = month(date),
+                              day = day(date),
+                              hour = hr,
+                              min = min,
+                              sec = sec)) |>
+  mutate(landslide_size = tolower(landslide_size)) |>
+  select(!c('hr','min','sec'))
+
+data_mon <- data |>
+  drop_na(date) |>
+  mutate(hemi = ifelse(latitude >= 0, 'north','south'),
+         season = fct_collapse(month.abb[month(date)],
+                              'Summer' = c('Jun','Jul','Aug'),
+                              'Fall' = c('Sep','Oct','Nov'),
+                              'Winter' = c('Dec','Jan','Feb'),
+                              'Spring' = c('Mar','Apr','May')),
+         summer = ((c(season == 'Summer' & hemi == 'north')) |
+                      (c(season == 'Winter' & hemi == 'south'))))
+
+```
+
+```{r}
+#| label: map
+
+wr <- map_data("world")
+data |>
+  filter(!is.na(landslide_size)) |>
+  filter(landslide_size != 'unknown') |>
+  mutate(landslide_size = str_replace_all(landslide_size,'_',' ')) |>
+  mutate(landslide_size = str_to_title(landslide_size)) |>
+  mutate(landslide_size = fct_relevel(landslide_size,
+                                     c('Catastrophic','Very Large','Large','Medium','Small'))) |>
+  ggplot() +
+  geom_map(aes(map_id = region), map = wr, data = wr, fill = 'grey') +
+  expand_limits(x = wr$long, y = wr$lat) + 
+  geom_point(aes(x = longitude, y = latitude, color = landslide_size),
+             size = .5,
+             alpha = 5) +
+  theme_grey() + 
+  theme(legend.position = 'bottom') + 
+  scale_color_manual(values = c('red','indianred1','orange','darkcyan','blue4')) + 
+  labs(
+    title = 'World Map of Landslides',
+    color = 'Size',
+    x = '',
+    y = '',
+    caption = 'Source: https://gpm.nasa.gov/landslides/index.html'
+  )
+  
+
+```
+
+## Are Large Landslides More Common in the Summer?
+
+$$
+  H_0: \hat p_{big}^{summer} = \hat p_{big}^{other}\ \ |\ \ 
+  H_A: \hat p_{big}^{summer} > \hat p_{big}^{other}
+$$
+
+```{r}
+#| label: month_H0
+#| fig-align: center
+
+set.seed(123)
+data_size <- data_mon |>
+  drop_na(landslide_size) |>
+  filter(tolower(landslide_size) != 'unknown') |>
+  mutate(size = fct_collapse(landslide_size,
+                             big = c('catastrophic','very_large','large'),
+                             small = c('medium','small'))) 
+
+dat <- data_size |>
+  group_by(summer, size) |>
+  summarize(n = n()) |> 
+  ungroup() |>
+  group_by(summer) |>
+  mutate(tot = sum(n)) |>
+  ungroup() |>
+  mutate(prop = n / tot)
+
+
+mon_null <- data_size |>
+  specify(size ~ summer, success = 'big') |>
+  hypothesise(null = 'independence') |>
+  generate(1000, type = 'permute') |>
+  calculate(stat = 'diff in props', order = c(TRUE,FALSE))
+
+obs <- sum(filter(dat,size == 'big')$prop * c(-1,1))
+
+visualise(mon_null) + 
+  shade_p_value(obs, direction = 'right')
+
+```
+
+::: incremental
+-   Null distribution yielded a p-value of 0
+-   Reject $H_0$ in favor of $H_A$
+:::
+
+## Seasonal Landslides
+
+
+```{r}
+#| label: months
+#| fig-align: center
+
+library(tidyverse)
+library(tidymodels)
+
+data <- read_csv('data/nasa_global_landslide_catalog_point.csv',
+                 show_col_types = FALSE) |>
+  select(c('event_date','location_accuracy','landslide_category',	
+           'landslide_trigger',	'landslide_size',	'landslide_setting',
+           'fatality_count', 'injury_count','country_name',	'country_code',	
+           'admin_division_name', 'gazetteer_closest_point', 'gazetteer_distance',
+           'longitude', 'latitude')) |>
+  separate_wider_delim(cols = 'event_date', ' ', names = c('date','time')) |>
+  separate_wider_delim(cols = 'time', ':', names = c('hr','min','sec')) |>
+  mutate(date = mdy(date)) |>
+  mutate(across(c('hr','min','sec'),as.numeric)) |>
+  mutate(date = make_datetime(year = year(date),
+                              month = month(date),
+                              day = day(date),
+                              hour = hr,
+                              min = min,
+                              sec = sec)) |>
+  mutate(landslide_size = tolower(landslide_size)) |>
+  select(!c('hr','min','sec'))
+
+data_mon <- data |>
+  drop_na(date) |>
+  mutate(hemi = ifelse(latitude >= 0, 'north','south'),
+         season = fct_collapse(month.abb[month(date)],
+                              'Summer' = c('Jun','Jul','Aug'),
+                              'Fall' = c('Sep','Oct','Nov'),
+                              'Winter' = c('Dec','Jan','Feb'),
+                              'Spring' = c('Mar','Apr','May')),
+         summer = ((c(season == 'Summer' & hemi == 'north')) |
+                      (c(season == 'Winter' & hemi == 'south'))))
+
+data_mon |>
+  filter(hemi == 'north') |>
+  ggplot(aes(x = fct_relevel(month.abb[month(date)],month.abb), 
+             fill = fct_relevel(season, c('Winter','Spring','Summer','Fall')))) + 
+  geom_bar() + 
+  geom_bar(data = filter(data_mon, hemi== 'south'), color = 'black') + 
+  theme_linedraw() + 
+  labs(
+    title = 'Landslides by Month',
+    subtitle = 'Black outline is Southern Hemisphere Landslides',
+    x = 'Month',
+    y = 'Count',
+    caption = 'Source: https://gpm.nasa.gov/landslides/index.html',
+    fill = 'Season'
+  ) + 
+  scale_fill_manual(values = c('skyblue','mistyrose','coral','orange'))
+
+```
+
+::: incremental
+
+- Landslides appear to be seasonal
+  - Max in winter and summer and min in fall and spring
+- Seasonal factors, mainly weather, contribute to the risk of landslides
+
+:::
+
+
+## Conclusions + Limitations
+
+#### [Conclusions]{style="color: brown;"}:
+
+-   Patterns in landslide size categories suggest varying severity and frequency.
+-   Correlation between landslide size and fatality counts underscores the need for targeted risk assessment.
+
+#### [Limitations]{style="color: brown;"}:
+
+-   Short analysis time frame (2007-2019) may not capture long-term trends.
+-   Data biases and missing information could impact accuracy and completeness of findings.
+
+
